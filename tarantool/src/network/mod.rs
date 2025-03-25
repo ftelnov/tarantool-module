@@ -12,6 +12,7 @@
 #[cfg(feature = "network_client")]
 pub mod client;
 pub mod protocol;
+pub mod tcp;
 
 pub use protocol::ProtocolError;
 

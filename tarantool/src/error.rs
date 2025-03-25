@@ -174,8 +174,8 @@ impl From<rmp_serde::encode::Error> for Error {
 }
 
 #[cfg(feature = "network_client")]
-impl From<crate::network::client::tcp::Error> for Error {
-    fn from(err: crate::network::client::tcp::Error) -> Self {
+impl From<crate::network::tcp::Error> for Error {
+    fn from(err: crate::network::tcp::Error) -> Self {
         Error::Tcp(Arc::new(err))
     }
 }
