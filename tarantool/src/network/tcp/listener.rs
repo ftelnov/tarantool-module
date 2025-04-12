@@ -1,4 +1,4 @@
-use super::Error;
+use super::{utils, Error};
 use std::cell::Cell;
 use std::ffi::{CString, NulError};
 use std::fmt::Display;
@@ -74,24 +74,10 @@ impl TcpListener {
                 return Poll::Ready(Err(Error::Accept { error }));
             }
 
-            let mut dummy = std::mem::MaybeUninit::<libc::sockaddr>::uninit();
-            let mut dummy_size = std::mem::size_of_val(&dummy) as _;
-
-            let accept_result = cvt(unsafe {
-                libc::accept4(
-                    raw_fd,
-                    dummy.as_mut_ptr(),
-                    &mut dummy_size,
-                    libc::SOCK_CLOEXEC | libc::SOCK_NONBLOCK,
-                )
-            });
-
-            match accept_result {
+            match utils::accept(raw_fd) {
                 Ok(raw_fd) => return Poll::Ready(Ok(raw_fd.into())),
                 Err(error) => {
-                    println!("Error on accept: {error:?}");
                     if error.kind() == io::ErrorKind::WouldBlock {
-                        println!("would wait via coio");
                         // SAFETY: safe as long as this future is executed by `fiber::block_on` async executor.
                         unsafe {
                             ContextExt::set_coio_wait(cx, raw_fd, ffi::CoIOFlags::READ);

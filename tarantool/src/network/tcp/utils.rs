@@ -242,6 +242,40 @@ pub fn nonblocking_socket(kind: libc::c_int) -> io::Result<AutoCloseFd> {
     Ok(fd)
 }
 
+#[cfg(target_os = "linux")]
+#[inline(always)]
+pub fn accept(fd: RawFd) -> io::Result<RawFd> {
+    let mut dummy = std::mem::MaybeUninit::<libc::sockaddr>::uninit();
+    let mut dummy_size = std::mem::size_of_val(&dummy) as _;
+    // SAFETY: This is safe because `libc::accept4` doesn't do undefined behavior
+    return cvt(unsafe {
+        libc::accept4(
+            fd,
+            dummy.as_mut_ptr(),
+            &mut dummy_size,
+            libc::SOCK_CLOEXEC | libc::SOCK_NONBLOCK,
+        )
+    });
+}
+
+#[cfg(target_os = "macos")]
+#[inline(always)]
+pub fn accept(fd: RawFd) -> io::Result<RawFd> {
+    let mut dummy = std::mem::MaybeUninit::<libc::sockaddr>::uninit();
+    let mut dummy_size = std::mem::size_of_val(&dummy) as _;
+    // SAFETY: This is safe because `libc::accept` doesn't do undefined behavior
+    unsafe {
+        let fd = cvt(libc::accept(fd, dummy.as_mut_ptr(), &mut dummy_size))?;
+
+        // Note that we use extra syscall because accept4 is unavailable.
+        //
+        // Calling "fcntl" directly, without retrieving current flags state is kinda dangerous,
+        // but we assume that newly accepted sockets doesn't have flags set.
+        cvt(libc::fcntl(fd, libc::F_SETFL, libc::O_NONBLOCK))?;
+    }
+    Ok(fd)
+}
+
 pub fn check_socket_error(fd: &impl AsRawFd) -> io::Result<()> {
     // SAFETY: passed only to ffi call so it's fine
     let mut val: libc::c_int = 0;
