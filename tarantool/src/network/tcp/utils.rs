@@ -222,58 +222,58 @@ pub fn nonblocking_socket(kind: libc::c_int) -> io::Result<AutoCloseFd> {
 pub fn nonblocking_socket(kind: libc::c_int) -> io::Result<AutoCloseFd> {
     // SAFETY: This is safe because `libc::socket` doesn't do undefined behavior
     let fd = unsafe { AutoCloseFd::from_raw_fd(cvt(libc::socket(kind, libc::SOCK_STREAM, 0))?) };
+    // SAFETY: safe as fd is just openned.
+    unsafe { make_socket_nonblocking(fd.as_raw_fd())? };
+    Ok(fd)
+}
+
+/// SAFETY: safe as long as fd is currently open.
+#[cfg(target_os = "macos")]
+unsafe fn make_socket_nonblocking(fd: RawFd) -> io::Result<()> {
     // SAFETY: This is safe because fd is open
-    unsafe { cvt(libc::ioctl(fd.as_raw_fd(), libc::FIOCLEX))? };
+    cvt(libc::ioctl(fd, libc::FIOCLEX))?;
     let opt_value = 1;
     // SAFETY: This is safe because fd is open and the opt_value buffer specification is valid.
-    unsafe {
-        cvt(libc::setsockopt(
-            fd.as_raw_fd(),
-            libc::SOL_SOCKET,
-            libc::SO_NOSIGPIPE,
-            &opt_value as *const _ as *const libc::c_void,
-            mem::size_of_val(&opt_value) as _,
-        ))?;
-    };
+    cvt(libc::setsockopt(
+        fd.as_raw_fd(),
+        libc::SOL_SOCKET,
+        libc::SO_NOSIGPIPE,
+        &opt_value as *const _ as *const libc::c_void,
+        mem::size_of_val(&opt_value) as _,
+    ))?;
     // SAFETY: This is safe because fd is open
-    unsafe {
-        cvt(libc::ioctl(fd.as_raw_fd(), libc::FIONBIO, &mut 1))?;
-    };
-    Ok(fd)
+    cvt(libc::ioctl(fd.as_raw_fd(), libc::FIONBIO, &mut 1))?;
+    Ok(())
 }
 
 #[cfg(target_os = "linux")]
 #[inline(always)]
-pub fn accept(fd: RawFd) -> io::Result<RawFd> {
+pub fn accept(fd: RawFd) -> io::Result<AutoCloseFd> {
     let mut dummy = std::mem::MaybeUninit::<libc::sockaddr>::uninit();
     let mut dummy_size = std::mem::size_of_val(&dummy) as _;
     // SAFETY: This is safe because `libc::accept4` doesn't do undefined behavior
-    return cvt(unsafe {
-        libc::accept4(
+    return unsafe {
+        AutoCloseFd::from_raw_fd(cvt(libc::accept4(
             fd,
             dummy.as_mut_ptr(),
             &mut dummy_size,
             libc::SOCK_CLOEXEC | libc::SOCK_NONBLOCK,
-        )
-    });
+        ))?)
+    };
 }
 
 #[cfg(target_os = "macos")]
 #[inline(always)]
-pub fn accept(fd: RawFd) -> io::Result<RawFd> {
+pub fn accept(fd: RawFd) -> io::Result<AutoCloseFd> {
     let mut dummy = std::mem::MaybeUninit::<libc::sockaddr>::uninit();
     let mut dummy_size = std::mem::size_of_val(&dummy) as _;
     // SAFETY: This is safe because `libc::accept` doesn't do undefined behavior
     unsafe {
-        let fd = cvt(libc::accept(fd, dummy.as_mut_ptr(), &mut dummy_size))?;
-
-        // Note that we use extra syscall because accept4 is unavailable.
-        //
-        // Calling "fcntl" directly, without retrieving current flags state is kinda dangerous,
-        // but we assume that newly accepted sockets doesn't have flags set.
-        cvt(libc::fcntl(fd, libc::F_SETFL, libc::O_NONBLOCK))?;
+        let fd =
+            AutoCloseFd::from_raw_fd(cvt(libc::accept(fd, dummy.as_mut_ptr(), &mut dummy_size))?);
+        make_socket_nonblocking(fd.as_raw_fd())?;
+        Ok(fd)
     }
-    Ok(fd)
 }
 
 pub fn check_socket_error(fd: &impl AsRawFd) -> io::Result<()> {

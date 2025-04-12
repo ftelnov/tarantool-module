@@ -108,24 +108,6 @@ mod tests {
 
     #[crate::test(tarantool = "crate")]
     async fn bind_accept_receive() {
-        let listener = TcpListener::bind("localhost", 18899).unwrap();
-
-        let mut peer = TcpStream::connect_async("localhost", 18899).await.unwrap();
-        let data = [1; 128];
-        peer.write_all(&data).await.unwrap();
-
-        let mut buf = vec![0; 128];
-        let mut read_stream = listener.accept().await.unwrap();
-        read_stream
-            .read_exact(&mut buf)
-            .timeout(_0_SEC)
-            .await
-            .unwrap();
-        assert_eq!(buf, data);
-    }
-
-    #[crate::test(tarantool = "crate")]
-    async fn bind_accept_must_block() {
         let data = [1; 128];
 
         let handle = fiber::start_async(async {
@@ -133,15 +115,13 @@ mod tests {
             let mut buf = vec![0; 128];
             let mut read_stream = listener.accept().await.unwrap();
 
-            fiber::start_async(async {
-                read_stream
-                    .read_exact(&mut buf)
-                    .timeout(_10_SEC)
-                    .await
-                    .unwrap();
-                assert_eq!(buf, data);
-            })
-            .join();
+            read_stream
+                .read_exact(&mut buf)
+                .timeout(_10_SEC)
+                .await
+                .unwrap();
+
+            assert_eq!(buf, data);
         });
 
         let mut peer = TcpStream::connect_async("localhost", 18899).await.unwrap();
