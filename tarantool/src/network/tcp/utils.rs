@@ -253,12 +253,12 @@ pub fn accept(fd: RawFd) -> io::Result<AutoCloseFd> {
     let mut dummy_size = std::mem::size_of_val(&dummy) as _;
     // SAFETY: This is safe because `libc::accept4` doesn't do undefined behavior
     return unsafe {
-        AutoCloseFd::from_raw_fd(cvt(libc::accept4(
+        Ok(AutoCloseFd::from_raw_fd(cvt(libc::accept4(
             fd,
             dummy.as_mut_ptr(),
             &mut dummy_size,
             libc::SOCK_CLOEXEC | libc::SOCK_NONBLOCK,
-        ))?)
+        ))?))
     };
 }
 
