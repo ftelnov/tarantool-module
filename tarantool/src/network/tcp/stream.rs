@@ -198,7 +198,6 @@ unsafe impl Sync for TcpStream {}
 
 impl From<RawFd> for TcpStream {
     fn from(value: RawFd) -> Self {
-        println!("new tcp stream from raw fd: {value}");
         Self {
             inner: Rc::new(TcpInner {
                 fd: Cell::new(Some(value)),
@@ -274,13 +273,11 @@ impl AsyncRead for TcpStream {
     ) -> Poll<io::Result<usize>> {
         let fd = self.inner.fd()?;
 
-        println!("before libc read on fd {fd}");
         let (result, err) = (
             // `self.inner.fd` must be nonblocking for this to work correctly
             unsafe { libc::read(fd, buf.as_mut_ptr() as *mut libc::c_void, buf.len()) },
             io::Error::last_os_error(),
         );
-        println!("after libc read {result} {err}");
 
         if result >= 0 {
             return Poll::Ready(Ok(result as usize));
