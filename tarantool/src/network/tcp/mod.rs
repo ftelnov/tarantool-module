@@ -15,7 +15,7 @@ pub enum Error {
     Connect { error: io::Error, address: String },
     #[error("failed to bind to {address}: {error}")]
     Bind { error: io::Error, address: String },
-    #[error("failed to accept connection on socket")]
+    #[error("failed to accept connection on socket: {error}")]
     Accept { error: io::Error },
     #[error("unknown address family: {0}")]
     UnknownAddressFamily(u16),
